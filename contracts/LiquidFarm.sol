@@ -1,16 +1,16 @@
 //SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.16;
+pragma solidity 0.8.17;
 
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {IArbitrageFarmFactory} from "./interfaces/IArbitrageFarmFactory.sol";
-import {IArbitrageFarm} from "./interfaces/IArbitrageFarm.sol";
+import {ILiquidFarmFactory} from "./interfaces/ILiquidFarmFactory.sol";
+import {ILiquidFarm} from "./interfaces/ILiquidFarm.sol";
 import {IFlashBorrower} from "./interfaces/IFlashBorrower.sol";
 import {IWETH} from "./interfaces/IWETH.sol";
 import {FullMath} from "./lib/FullMath.sol";
 
-contract ArbitrageFarm is IArbitrageFarm, ERC20 {
+contract LiquidFarm is ILiquidFarm, ERC20 {
     using SafeERC20 for IERC20;
 
     address public rewardsToken;
@@ -22,8 +22,8 @@ contract ArbitrageFarm is IArbitrageFarm, ERC20 {
     uint256 public rewardsPending;
     uint256 internal constant PRECISION = 1e30;
     uint64 public lastUpdateTime;
-    uint32 public constant transferLock = 1 days; // for liquid staked LP tokens after stake or claim (withdrawals exempted)
-    uint32 public constant flashLoanFee = 50000; // 0.005%
+    uint32 public constant transferLock = 7 days; // for liquid staked LP tokens after stake or claim (withdrawals exempted)
+    uint32 public constant flashLoanFee = 4e3; // 0.04%
     mapping(address => uint256) public userRewardPerTokenPaid;
     mapping(address => uint256) public rewards;
     mapping(address => uint64) public lastClaimedRewards;
@@ -191,7 +191,7 @@ contract ArbitrageFarm is IArbitrageFarm, ERC20 {
         bytes memory data
     ) public {
         IERC20 _rewardsToken = IERC20(rewardsToken);
-        bool freeFlashLoan = IArbitrageFarmFactory(farmsFactory).isFreeFlashLoan(msg.sender);
+        bool freeFlashLoan = ILiquidFarmFactory(farmsFactory).isFreeFlashLoan(msg.sender);
         uint256 fee = !freeFlashLoan ? FullMath.mulDiv(amount, flashLoanFee, 1e7) : 0;
         uint256 minBalanceAfter = _rewardsToken.balanceOf(address(this)) + fee;
         _rewardsToken.safeTransfer(receiver, amount);

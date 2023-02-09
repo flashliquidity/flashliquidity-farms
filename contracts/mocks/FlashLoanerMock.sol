@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 import {IFlashBorrower} from "../interfaces/IFlashBorrower.sol";
-import {IArbitrageFarm} from "../interfaces/IArbitrageFarm.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 

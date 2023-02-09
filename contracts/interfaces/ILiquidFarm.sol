@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 
 import "./IFlashBorrower.sol";
 
-interface IArbitrageFarm {
+interface ILiquidFarm {
     error StakingZero();
     error WithdrawingZero();
     error FlashLoanNotRepaid();

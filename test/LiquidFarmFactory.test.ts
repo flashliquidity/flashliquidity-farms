@@ -3,7 +3,7 @@ import { expect } from "chai"
 import { time } from "@nomicfoundation/hardhat-network-helpers"
 import { ADDRESS_ZERO, WETH_ADDR } from "./utilities"
 
-describe("ArbitrageFarmFactory", function () {
+describe("LiquidFarmFactory", function () {
     before(async function () {
         this.signers = await ethers.getSigners()
         this.governor = this.signers[0]
@@ -13,7 +13,7 @@ describe("ArbitrageFarmFactory", function () {
         this.alice = this.signers[4]
         this.transferGovernanceDelay = 60
         this.ERC20Mock = await ethers.getContractFactory("ERC20Mock", this.minter)
-        this.FarmFactory = await ethers.getContractFactory("ArbitrageFarmFactory")
+        this.FarmFactory = await ethers.getContractFactory("LiquidFarmFactory")
     })
 
     beforeEach(async function () {
@@ -30,14 +30,10 @@ describe("ArbitrageFarmFactory", function () {
         await this.rewardsToken.deployed()
     })
 
-    it("Should set Governor correctly", async function () {
-        expect(await this.farmFactory.governor()).to.equal(this.governor.address)
-    })
-
     it("Should allow only Governor to request governance transfer", async function () {
         await expect(
             this.farmFactory.connect(this.bob).setPendingGovernor(this.bob.address)
-        ).to.be.revertedWith("Only Governor")
+        ).to.be.revertedWith("NotAuthorized()")
         expect(await this.farmFactory.pendingGovernor()).to.not.be.equal(this.bob.address)
         await this.farmFactory.connect(this.governor).setPendingGovernor(this.bob.address)
         expect(await this.farmFactory.pendingGovernor()).to.be.equal(this.bob.address)
@@ -47,12 +43,12 @@ describe("ArbitrageFarmFactory", function () {
     it("Should not allow to set pendingGovernor to zero address", async function () {
         await expect(
             this.farmFactory.connect(this.governor).setPendingGovernor(ADDRESS_ZERO)
-        ).to.be.revertedWith("Zero Address")
+        ).to.be.revertedWith("ZeroAddress()")
     })
 
     it("Should allow to transfer governance only after min delay has passed from request", async function () {
         await this.farmFactory.connect(this.governor).setPendingGovernor(this.bob.address)
-        await expect(this.farmFactory.transferGovernance()).to.be.revertedWith("Too Early")
+        await expect(this.farmFactory.transferGovernance()).to.be.revertedWith("TooEarly()")
         await time.increase(this.transferGovernanceDelay + 1)
         await this.farmFactory.transferGovernance()
         expect(await this.farmFactory.governor()).to.be.equal(this.bob.address)
@@ -62,7 +58,7 @@ describe("ArbitrageFarmFactory", function () {
         expect(await this.farmFactory.isFreeFlashLoan(this.alice.address)).to.be.false
         await expect(
             this.farmFactory.connect(this.bob).setFreeFlashLoan(this.alice.address, true)
-        ).to.be.revertedWith("Only Governor")
+        ).to.be.revertedWith("NotAuthorized()")
         await this.farmFactory.connect(this.governor).setFreeFlashLoan(this.alice.address, true)
         expect(await this.farmFactory.isFreeFlashLoan(this.alice.address)).to.be.true
     })
@@ -72,7 +68,7 @@ describe("ArbitrageFarmFactory", function () {
             this.farmFactory
                 .connect(this.bob)
                 .deploy("TOKEN1-TOKEN2", "stFLASH", this.flashLP.address, this.rewardsToken.address)
-        ).to.be.revertedWith("Only Governor")
+        ).to.be.revertedWith("NotAuthorized()")
         expect(await this.farmFactory.lpTokenFarm(this.flashLP.address)).to.be.equal(ADDRESS_ZERO)
         await this.farmFactory
             .connect(this.governor)

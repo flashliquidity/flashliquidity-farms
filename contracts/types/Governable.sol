@@ -8,6 +8,10 @@ abstract contract Governable {
     uint256 public govTransferReqTimestamp;
     uint256 public immutable transferGovernanceDelay;
 
+    error ZeroAddress();
+    error NotAuthorized();
+    error TooEarly();
+
     event GovernanceTrasferred(address indexed _oldGovernor, address indexed _newGovernor);
     event PendingGovernorChanged(address indexed _pendingGovernor);
 
@@ -18,7 +22,7 @@ abstract contract Governable {
     }
 
     function setPendingGovernor(address _pendingGovernor) external onlyGovernor {
-        require(_pendingGovernor != address(0), "Zero Address");
+        if (_pendingGovernor == address(0)) revert ZeroAddress();
         pendingGovernor = _pendingGovernor;
         govTransferReqTimestamp = block.timestamp;
         emit PendingGovernorChanged(_pendingGovernor);
@@ -27,16 +31,16 @@ abstract contract Governable {
     function transferGovernance() external {
         address _newGovernor = pendingGovernor;
         address _oldGovernor = governor;
-        require(_newGovernor != address(0), "Zero Address");
-        require(msg.sender == _oldGovernor || msg.sender == _newGovernor, "Forbidden");
-        require(block.timestamp - govTransferReqTimestamp > transferGovernanceDelay, "Too Early");
+        if (_newGovernor == address(0)) revert ZeroAddress();
+        if (msg.sender != _oldGovernor && msg.sender != _newGovernor) revert NotAuthorized();
+        if (block.timestamp - govTransferReqTimestamp < transferGovernanceDelay) revert TooEarly();
         pendingGovernor = address(0);
         governor = _newGovernor;
         emit GovernanceTrasferred(_oldGovernor, _newGovernor);
     }
 
     modifier onlyGovernor() {
-        require(msg.sender == governor, "Only Governor");
+        if (msg.sender != governor) revert NotAuthorized();
         _;
     }
 }

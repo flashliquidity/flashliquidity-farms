@@ -2,7 +2,7 @@ import { ethers } from "hardhat"
 import { expect } from "chai"
 import { time } from "@nomicfoundation/hardhat-network-helpers"
 
-describe("ArbitrageFarm", function () {
+describe("LiquidFarm", function () {
     before(async function () {
         this.signers = await ethers.getSigners()
         this.governor = this.signers[0]
@@ -12,7 +12,7 @@ describe("ArbitrageFarm", function () {
         this.alice = this.signers[4]
         this.transferGovernanceDelay = 60
         this.ERC20Mock = await ethers.getContractFactory("ERC20Mock", this.minter)
-        this.FarmFactory = await ethers.getContractFactory("ArbitrageFarmFactory")
+        this.FarmFactory = await ethers.getContractFactory("LiquidFarmFactory")
         this.VaultMock = await ethers.getContractFactory("VaultMock")
         this.FlashLoanerMock = await ethers.getContractFactory("FlashLoanerMock")
         this.WETH = await ethers.getContractFactory("WETH9")
@@ -38,7 +38,7 @@ describe("ArbitrageFarm", function () {
             .connect(this.governor)
             .deploy("MOCK1-MOCK2", "stFLASH", this.flashLP.address, this.rewardsToken.address)
         const farmAddr = await this.farmFactory.lpTokenFarm(this.flashLP.address)
-        this.farm = await ethers.getContractAt("ArbitrageFarm", farmAddr)
+        this.farm = await ethers.getContractAt("LiquidFarm", farmAddr)
     })
 
     it("Should set farmsFactory correctly", async function () {
@@ -118,7 +118,7 @@ describe("ArbitrageFarm", function () {
         await expect(
             this.farm.connect(this.bob).transfer(this.alice.address, 1e12)
         ).to.be.revertedWith("TransferLocked(" + timestamp + ")")
-        await time.increase(86400)
+        await time.increase(86400 * 7)
         await this.farm.connect(this.bob).transfer(this.alice.address, 1e12)
         expect(await this.farm.balanceOf(this.alice.address)).to.be.equal(1e12)
         expect(await this.farm.balanceOf(this.bob.address)).to.be.equal(0)
@@ -134,13 +134,13 @@ describe("ArbitrageFarm", function () {
         await this.farm.connect(this.bob).stake(1e12)
         await this.farm.connect(this.alice).stake(1e12)
         await this.farm.connect(this.jack).stake(1e13)
-        await time.increase(86400)
+        await time.increase(86400 * 7)
         await this.farm.connect(this.bob).approve(this.vault.address, 1e15)
         await this.farm.connect(this.alice).approve(this.vault.address, 1e15)
         await this.vault.connect(this.alice).deposit(1e12)
         for (let i = 1; i < 3; i++) {
             await this.rewardsToken.connect(this.minter).transfer(this.farm.address, 1e6)
-            await time.increase(86400)
+            await time.increase(86400 * 7)
             await this.vault.connect(this.bob).deposit(1e12)
             await this.vault.connect(this.bob).withdraw(1e12)
             await this.farm.connect(this.bob).getReward()
@@ -152,12 +152,12 @@ describe("ArbitrageFarm", function () {
         await this.vault.connect(this.alice).withdraw(1e12)
         await this.farm.connect(this.alice).getReward()
         await this.farm.connect(this.jack).getReward()
-        expect(await this.rewardsToken.balanceOf(this.bob.address)).to.be.equal(333347)
-        expect(await this.rewardsToken.balanceOf(this.alice.address)).to.be.equal(166672)
-        expect(await this.rewardsToken.balanceOf(this.jack.address)).to.be.equal(2499976)
+        expect(await this.rewardsToken.balanceOf(this.bob.address)).to.be.equal(333335)
+        expect(await this.rewardsToken.balanceOf(this.alice.address)).to.be.equal(166667)
+        expect(await this.rewardsToken.balanceOf(this.jack.address)).to.be.equal(2499997)
     })
 
-    it("Should charge 5bps fee for flashloans except exempted addresses", async function () {
+    it("Should charge 4bps fee for flashloans except exempted addresses", async function () {
         this.flashLoaner = await this.FlashLoanerMock.deploy(this.farm.address)
         await this.flashLoaner.deployed()
         await this.rewardsToken.connect(this.minter).transfer(this.flashLoaner.address, 1e10)
@@ -170,7 +170,7 @@ describe("ArbitrageFarm", function () {
                 1e12,
                 ethers.utils.formatBytes32String("")
             )
-        expect(await this.rewardsToken.balanceOf(this.flashLoaner.address)).to.be.equal(5e9)
+        expect(await this.rewardsToken.balanceOf(this.flashLoaner.address)).to.be.equal(96e8)
         await this.flashLoaner.setIgnoreFee(true)
         await expect(
             this.farm
@@ -204,7 +204,7 @@ describe("ArbitrageFarm (WETH rewards case)", function () {
         this.alice = this.signers[4]
         this.transferGovernanceDelay = 60
         this.ERC20Mock = await ethers.getContractFactory("ERC20Mock", this.minter)
-        this.FarmFactory = await ethers.getContractFactory("ArbitrageFarmFactory")
+        this.FarmFactory = await ethers.getContractFactory("LiquidFarmFactory")
         this.VaultMock = await ethers.getContractFactory("VaultMock")
         this.FlashLoanerMock = await ethers.getContractFactory("FlashLoanerMock")
         this.WETH = await ethers.getContractFactory("WETH9")
@@ -228,7 +228,7 @@ describe("ArbitrageFarm (WETH rewards case)", function () {
             .connect(this.governor)
             .deploy("MOCK1-MOCK2", "stFLASH", this.flashLP.address, this.weth.address)
         const farmAddr = await this.farmFactory.lpTokenFarm(this.flashLP.address)
-        this.farm = await ethers.getContractAt("ArbitrageFarm", farmAddr)
+        this.farm = await ethers.getContractAt("LiquidFarm", farmAddr)
     })
 
     it("exit() should retrieve rewards and staked tokens", async function () {
@@ -245,10 +245,10 @@ describe("ArbitrageFarm (WETH rewards case)", function () {
         await this.farm.connect(this.bob).exit()
         await this.farm.connect(this.alice).exit()
         expect(await ethers.provider.getBalance(this.bob.address)).to.be.equal(
-            ethers.utils.parseUnits("10000746333400251146196", "wei")
+            ethers.utils.parseUnits("10000746333387951473865", "wei")
         )
         expect(await ethers.provider.getBalance(this.alice.address)).to.be.equal(
-            ethers.utils.parseUnits("10000248678545065464378", "wei")
+            ethers.utils.parseUnits("10000248678513145063918", "wei")
         )
         expect(await this.weth.balanceOf(this.farm.address)).to.be.equal(0)
         expect(await ethers.provider.getBalance(this.farm.address)).to.be.equal(0)

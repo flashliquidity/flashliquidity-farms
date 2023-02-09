@@ -1,13 +1,12 @@
 //SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.16;
+pragma solidity 0.8.17;
 
 import {Governable} from "./types/Governable.sol";
-import {IArbitrageFarmFactory} from "./interfaces/IArbitrageFarmFactory.sol";
-import {IArbitrageFarm} from "./interfaces/IArbitrageFarm.sol";
-import {ArbitrageFarm} from "./ArbitrageFarm.sol";
+import {ILiquidFarmFactory} from "./interfaces/ILiquidFarmFactory.sol";
+import {LiquidFarm} from "./LiquidFarm.sol";
 
-contract ArbitrageFarmFactory is IArbitrageFarmFactory, Governable {
+contract LiquidFarmFactory is ILiquidFarmFactory, Governable {
     address public WETH;
     address[] public stakingLpTokens;
     mapping(address => address) public lpTokenFarm;
@@ -35,7 +34,7 @@ contract ArbitrageFarmFactory is IArbitrageFarmFactory, Governable {
             revert AlreadyDeployed();
         }
         lpTokenFarm[stakingToken] = address(
-            new ArbitrageFarm(name, symbol, rewardsToken, stakingToken, WETH)
+            new LiquidFarm(name, symbol, rewardsToken, stakingToken, WETH)
         );
         stakingLpTokens.push(stakingToken);
         emit FarmDeployed(stakingToken, rewardsToken);
