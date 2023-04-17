@@ -12,6 +12,10 @@ contract LiquidFarmFactory is ILiquidFarmFactory, Governable {
     mapping(address => address) public lpTokenFarm;
     mapping(address => bool) public isFreeFlashLoan;
 
+    error AlreadyDeployed();
+
+    event FarmDeployed(address indexed _stakingToken, address indexed _rewardsToken);
+
     constructor(
         address _WETH,
         address _governor,
@@ -25,18 +29,18 @@ contract LiquidFarmFactory is ILiquidFarmFactory, Governable {
     }
 
     function deploy(
-        string memory name,
-        string memory symbol,
-        address stakingToken,
-        address rewardsToken
+        string memory _name,
+        string memory _symbol,
+        address _stakingToken,
+        address _rewardsToken
     ) external onlyGovernor {
-        if (lpTokenFarm[stakingToken] != address(0)) {
+        if (lpTokenFarm[_stakingToken] != address(0)) {
             revert AlreadyDeployed();
         }
-        lpTokenFarm[stakingToken] = address(
-            new LiquidFarm(name, symbol, rewardsToken, stakingToken, WETH)
+        lpTokenFarm[_stakingToken] = address(
+            new LiquidFarm(_name, _symbol, _rewardsToken, _stakingToken, WETH)
         );
-        stakingLpTokens.push(stakingToken);
-        emit FarmDeployed(stakingToken, rewardsToken);
+        stakingLpTokens.push(_stakingToken);
+        emit FarmDeployed(_stakingToken, _rewardsToken);
     }
 }

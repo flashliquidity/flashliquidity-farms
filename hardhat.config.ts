@@ -3,17 +3,16 @@ import "@nomiclabs/hardhat-etherscan"
 import "@nomiclabs/hardhat-ethers"
 import "hardhat-deploy"
 import "hardhat-deploy-ethers"
+import "hardhat-gas-reporter"
 import "dotenv/config"
 import { HardhatUserConfig } from "hardhat/config"
 
 const MAINNET_RPC = "https://rpc-mainnet.maticvigil.com"
 const MUMBAI_RPC = "https://rpc-mumbai.maticvigil.com/"
-const PRIVATE_KEY = process.env.PRIVATE_KEY || "private key"
-const POLYGONSCAN_API_KEY = process.env.POLYGONSCAN_API_KEY || "api key"
 
 const config: HardhatUserConfig = {
     etherscan: {
-        apiKey: POLYGONSCAN_API_KEY,
+        apiKey: process.env.POLYGONSCAN_API_KEY,
     },
     networks: {
         matic: {
@@ -21,7 +20,7 @@ const config: HardhatUserConfig = {
             chainId: 137,
             live: true,
             saveDeployments: true,
-            accounts: [PRIVATE_KEY],
+            accounts: [process.env.PRIVATE_KEY],
         },
         mumbai: {
             url: MUMBAI_RPC,
@@ -29,8 +28,14 @@ const config: HardhatUserConfig = {
             live: true,
             saveDeployments: true,
             gasMultiplier: 2,
-            accounts: [PRIVATE_KEY],
+            accounts: [process.env.PRIVATE_KEY],
         },
+    },
+    gasReporter: {
+        enabled: true,
+        currency: "USD",
+        outputFile: "gas-report.txt",
+        noColors: true,
     },
     solidity: {
         version: "0.8.17",

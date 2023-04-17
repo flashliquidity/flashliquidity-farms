@@ -5,23 +5,6 @@ pragma solidity ^0.8.0;
 import "./IFlashBorrower.sol";
 
 interface ILiquidFarm {
-    error StakingZero();
-    error WithdrawingZero();
-    error FlashLoanNotRepaid();
-    error TransferLocked(uint256 _unlockTime);
-
-    event Staked(address indexed user, uint256 amount);
-    event Withdrawn(address indexed user, uint256 amount);
-    event RewardPaid(address indexed user, uint256 reward);
-    event LogFlashLoan(
-        address indexed borrower,
-        address indexed receiver,
-        address indexed rewardsToken,
-        uint256 amount,
-        uint256 fee
-    );
-    event FreeFlashloanerChanged(address indexed flashloaner, bool indexed free);
-
     function farmsFactory() external view returns (address);
 
     function stakingToken() external view returns (address);

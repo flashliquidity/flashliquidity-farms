@@ -245,10 +245,10 @@ describe("ArbitrageFarm (WETH rewards case)", function () {
         await this.farm.connect(this.bob).exit()
         await this.farm.connect(this.alice).exit()
         expect(await ethers.provider.getBalance(this.bob.address)).to.be.equal(
-            ethers.utils.parseUnits("10000746333387951473865", "wei")
+            ethers.utils.parseUnits("10000746455217102813319", "wei")
         )
         expect(await ethers.provider.getBalance(this.alice.address)).to.be.equal(
-            ethers.utils.parseUnits("10000248678513145063918", "wei")
+            ethers.utils.parseUnits("10000248727683813299557", "wei")
         )
         expect(await this.weth.balanceOf(this.farm.address)).to.be.equal(0)
         expect(await ethers.provider.getBalance(this.farm.address)).to.be.equal(0)

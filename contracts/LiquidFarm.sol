@@ -22,11 +22,28 @@ contract LiquidFarm is ILiquidFarm, ERC20 {
     uint256 public rewardsPending;
     uint256 internal constant PRECISION = 1e30;
     uint64 public lastUpdateTime;
-    uint32 public constant transferLock = 7 days; // for liquid staked LP tokens after stake or claim (withdrawals exempted)
-    uint32 public constant flashLoanFee = 4e3; // 0.04%
+    uint32 public constant transferLock = 7 days;
+    uint32 public constant flashLoanFee = 4e3;
     mapping(address => uint256) public userRewardPerTokenPaid;
     mapping(address => uint256) public rewards;
     mapping(address => uint64) public lastClaimedRewards;
+
+    error StakingZero();
+    error WithdrawingZero();
+    error FlashLoanNotRepaid();
+    error TransferLocked(uint256 _unlockTime);
+
+    event Staked(address indexed user, uint256 amount);
+    event Withdrawn(address indexed user, uint256 amount);
+    event RewardPaid(address indexed user, uint256 reward);
+    event LogFlashLoan(
+        address indexed borrower,
+        address indexed receiver,
+        address indexed rewardsToken,
+        uint256 amount,
+        uint256 fee
+    );
+    event FreeFlashloanerChanged(address indexed flashloaner, bool indexed free);
 
     constructor(
         string memory name,
@@ -44,7 +61,11 @@ contract LiquidFarm is ILiquidFarm, ERC20 {
     receive() external payable {}
 
     function getTransferUnlockTime(address _account) external view returns (uint64) {
-        return lastClaimedRewards[_account] > 0 ? lastClaimedRewards[_account] + transferLock : 0;
+        uint64 _lastClaimedRewards = lastClaimedRewards[_account];
+        if (_lastClaimedRewards > 0) {
+            return _lastClaimedRewards + transferLock;
+        }
+        return 0;
     }
 
     function rewardPerToken() external view returns (uint256) {
@@ -61,25 +82,25 @@ contract LiquidFarm is ILiquidFarm, ERC20 {
             );
     }
 
-    function earnedRewardToken(address account) public view returns (uint256) {
+    function earnedRewardToken(address _account) public view returns (uint256) {
         return
             FullMath.mulDiv(
                 _earned(
-                    account,
-                    balanceOf(account),
+                    _account,
+                    balanceOf(_account),
                     _rewardPerToken(totalSupply(), rewardRate),
-                    rewards[account]
+                    rewards[_account]
                 ),
                 IERC20(rewardsToken).balanceOf(address(this)),
                 rewardsPending + (block.timestamp - lastUpdateTime) * rewardRate
             );
     }
 
-    function stake(uint256 amount) external {
-        if (amount == 0) {
+    function stake(uint256 _amount) external {
+        if (_amount == 0) {
             revert StakingZero();
         }
-        uint256 accountBalance = balanceOf(msg.sender);
+        uint256 _accountBalance = balanceOf(msg.sender);
         uint256 totalSupply_ = totalSupply();
         uint256 rewardPerToken_ = _rewardPerToken(totalSupply_, rewardRate);
         lastClaimedRewards[msg.sender] = uint64(block.timestamp);
@@ -90,93 +111,105 @@ contract LiquidFarm is ILiquidFarm, ERC20 {
         lastUpdateTime = uint64(block.timestamp);
         rewards[msg.sender] = _earned(
             msg.sender,
-            accountBalance,
+            _accountBalance,
             rewardPerToken_,
             rewards[msg.sender]
         );
         userRewardPerTokenPaid[msg.sender] = rewardPerToken_;
-        IERC20(stakingToken).safeTransferFrom(msg.sender, address(this), amount);
-        _mint(msg.sender, amount);
-        emit Staked(msg.sender, amount);
+        IERC20(stakingToken).safeTransferFrom(msg.sender, address(this), _amount);
+        _mint(msg.sender, _amount);
+        emit Staked(msg.sender, _amount);
     }
 
-    function withdraw(uint256 amount) public {
-        if (amount == 0) {
+    function withdraw(uint256 _amount) public {
+        if (_amount == 0) {
             revert WithdrawingZero();
         }
-        uint256 accountBalance = balanceOf(msg.sender);
+        uint256 _accountBalance = balanceOf(msg.sender);
         uint256 totalSupply_ = totalSupply();
         uint256 rewardPerToken_ = _rewardPerToken(totalSupply_, rewardRate);
         rewardPerTokenStored = rewardPerToken_;
-        if (lastUpdateTime != 0) {
-            rewardsPending += (block.timestamp - lastUpdateTime) * rewardRate;
+        uint256 _lastUpdateTime = lastUpdateTime;
+        if (_lastUpdateTime != 0) {
+            rewardsPending += (block.timestamp - _lastUpdateTime) * rewardRate;
         }
         lastUpdateTime = uint64(block.timestamp);
         rewards[msg.sender] = _earned(
             msg.sender,
-            accountBalance,
+            _accountBalance,
             rewardPerToken_,
             rewards[msg.sender]
         );
-        _approve(msg.sender, address(this), amount);
-        _burn(msg.sender, amount);
-        IERC20(stakingToken).safeTransfer(msg.sender, amount);
-        emit Withdrawn(msg.sender, amount);
+        //_approve(msg.sender, address(this), amount);
+        _burn(msg.sender, _amount);
+        IERC20(stakingToken).safeTransfer(msg.sender, _amount);
+        emit Withdrawn(msg.sender, _amount);
     }
 
     function exit() external {
-        uint256 accountBalance = balanceOf(msg.sender);
+        uint256 _accountBalance = balanceOf(msg.sender);
         uint256 totalSupply_ = totalSupply();
         uint256 rewardPerToken_ = _rewardPerToken(totalSupply_, rewardRate);
         uint256 _rewardsPending = rewardsPending;
-        uint256 reward = _earned(msg.sender, accountBalance, rewardPerToken_, rewards[msg.sender]);
-        if (reward > 0) {
+        uint256 _reward = _earned(
+            msg.sender,
+            _accountBalance,
+            rewardPerToken_,
+            rewards[msg.sender]
+        );
+        if (_reward > 0) {
             rewards[msg.sender] = 0;
         }
         rewardPerTokenStored = rewardPerToken_;
-        if (lastUpdateTime != 0) {
-            _rewardsPending += (block.timestamp - lastUpdateTime) * rewardRate;
+        uint256 _lastUpdateTime = lastUpdateTime;
+        if (_lastUpdateTime != 0) {
+            _rewardsPending += (block.timestamp - _lastUpdateTime) * rewardRate;
             rewardsPending = _rewardsPending;
         }
         lastUpdateTime = uint64(block.timestamp);
         userRewardPerTokenPaid[msg.sender] = rewardPerToken_;
-        _approve(msg.sender, address(this), accountBalance);
-        if (reward > 0) {
+        //_approve(msg.sender, address(this), accountBalance);
+        if (_reward > 0) {
             address _rewardsToken = rewardsToken;
-            rewardsPending -= reward;
+            rewardsPending -= _reward;
             uint256 profitsShare = FullMath.mulDiv(
-                reward,
+                _reward,
                 IERC20(_rewardsToken).balanceOf(address(this)),
                 _rewardsPending
             );
             _getReward(_rewardsToken, profitsShare);
         }
-        _burn(msg.sender, accountBalance);
-        IERC20(stakingToken).safeTransfer(msg.sender, accountBalance);
-        emit Withdrawn(msg.sender, accountBalance);
+        _burn(msg.sender, _accountBalance);
+        IERC20(stakingToken).safeTransfer(msg.sender, _accountBalance);
+        emit Withdrawn(msg.sender, _accountBalance);
     }
 
     function getReward() public {
-        uint256 accountBalance = balanceOf(msg.sender);
+        uint256 _accountBalance = balanceOf(msg.sender);
         uint256 totalSupply_ = totalSupply();
         uint256 rewardPerToken_ = _rewardPerToken(totalSupply_, rewardRate);
         uint256 _rewardsPending = rewardsPending;
-        uint256 reward = _earned(msg.sender, accountBalance, rewardPerToken_, rewards[msg.sender]);
+        uint256 _reward = _earned(
+            msg.sender,
+            _accountBalance,
+            rewardPerToken_,
+            rewards[msg.sender]
+        );
         lastClaimedRewards[msg.sender] = uint64(block.timestamp);
         rewardPerTokenStored = rewardPerToken_;
-        if (lastUpdateTime != 0) {
-            _rewardsPending += (block.timestamp - lastUpdateTime) * rewardRate;
+        uint256 _lastUpdateTime = lastUpdateTime;
+        if (_lastUpdateTime != 0) {
+            _rewardsPending += (block.timestamp - _lastUpdateTime) * rewardRate;
             rewardsPending = _rewardsPending;
         }
         lastUpdateTime = uint64(block.timestamp);
         userRewardPerTokenPaid[msg.sender] = rewardPerToken_;
-
-        if (reward > 0) {
+        if (_reward > 0) {
             rewards[msg.sender] = 0;
             address _rewardsToken = rewardsToken;
-            rewardsPending -= reward;
+            rewardsPending -= _reward;
             uint256 profitsShare = FullMath.mulDiv(
-                reward,
+                _reward,
                 IERC20(_rewardsToken).balanceOf(address(this)),
                 _rewardsPending
             );
@@ -185,35 +218,35 @@ contract LiquidFarm is ILiquidFarm, ERC20 {
     }
 
     function flashLoan(
-        IFlashBorrower borrower,
-        address receiver,
-        uint256 amount,
-        bytes memory data
+        IFlashBorrower _borrower,
+        address _receiver,
+        uint256 _amount,
+        bytes memory _data
     ) public {
         IERC20 _rewardsToken = IERC20(rewardsToken);
-        bool freeFlashLoan = ILiquidFarmFactory(farmsFactory).isFreeFlashLoan(msg.sender);
-        uint256 fee = !freeFlashLoan ? FullMath.mulDiv(amount, flashLoanFee, 1e7) : 0;
-        uint256 minBalanceAfter = _rewardsToken.balanceOf(address(this)) + fee;
-        _rewardsToken.safeTransfer(receiver, amount);
-        borrower.onFlashLoan(msg.sender, address(rewardsToken), amount, fee, data);
+        bool _freeFlashLoan = ILiquidFarmFactory(farmsFactory).isFreeFlashLoan(msg.sender);
+        uint256 _fee = !_freeFlashLoan ? FullMath.mulDiv(_amount, flashLoanFee, 1e7) : 0;
+        uint256 minBalanceAfter = _rewardsToken.balanceOf(address(this)) + _fee;
+        _rewardsToken.safeTransfer(_receiver, _amount);
+        _borrower.onFlashLoan(msg.sender, address(rewardsToken), _amount, _fee, _data);
         if (_rewardsToken.balanceOf(address(this)) < minBalanceAfter) {
             revert FlashLoanNotRepaid();
         }
-        emit LogFlashLoan(address(borrower), receiver, address(rewardsToken), amount, fee);
+        emit LogFlashLoan(address(_borrower), _receiver, address(rewardsToken), _amount, _fee);
     }
 
     function _earned(
-        address account,
-        uint256 accountBalance,
+        address _account,
+        uint256 _accountBalance,
         uint256 rewardPerToken_,
-        uint256 accountRewards
+        uint256 _accountRewards
     ) internal view returns (uint256) {
         return
             FullMath.mulDiv(
-                accountBalance,
-                rewardPerToken_ - userRewardPerTokenPaid[account],
+                _accountBalance,
+                rewardPerToken_ - userRewardPerTokenPaid[_account],
                 PRECISION
-            ) + accountRewards;
+            ) + _accountRewards;
     }
 
     function _rewardPerToken(uint256 totalSupply_, uint256 rewardRate_)
@@ -233,15 +266,15 @@ contract LiquidFarm is ILiquidFarm, ERC20 {
             );
     }
 
-    function _getReward(address _rewardsToken, uint256 profitsShare) private {
-        if (rewardsToken == WETH) {
-            IWETH(WETH).withdraw(profitsShare);
-            (bool success, ) = msg.sender.call{value: profitsShare}("");
+    function _getReward(address _rewardsToken, uint256 _profitsShare) private {
+        if (_rewardsToken == WETH) {
+            IWETH(WETH).withdraw(_profitsShare);
+            (bool success, ) = msg.sender.call{value: _profitsShare}("");
             require(success, "Transfer failed");
         } else {
-            IERC20(_rewardsToken).safeTransfer(msg.sender, profitsShare);
+            IERC20(_rewardsToken).safeTransfer(msg.sender, _profitsShare);
         }
-        emit RewardPaid(msg.sender, profitsShare);
+        emit RewardPaid(msg.sender, _profitsShare);
     }
 
     function _beforeTokenTransfer(
@@ -264,8 +297,9 @@ contract LiquidFarm is ILiquidFarm, ERC20 {
         uint256 _toBalance = balanceOf(_to);
         uint256 rewardPerToken_ = _rewardPerToken(totalSupply(), rewardRate);
         rewardPerTokenStored = rewardPerToken_;
-        if (lastUpdateTime != 0) {
-            rewardsPending += (block.timestamp - lastUpdateTime) * rewardRate;
+        uint256 _lastUpdateTime = lastUpdateTime;
+        if (_lastUpdateTime != 0) {
+            rewardsPending += (block.timestamp - _lastUpdateTime) * rewardRate;
         }
         lastUpdateTime = uint64(block.timestamp);
         uint256 reward = _earned(_from, _fromBalance, rewardPerToken_, rewards[_from]);
